@@ -1,13 +1,20 @@
+import base64
 import json
 import threading
 import time
 import requests
+import urllib
 import youtube_dl
+from flask import Flask, request, redirect, g, render_template
+from spotify import app_authorisation, user_authorisation, playlist_data
 
+app = Flask(__name__)
 
-playlist = None
-spotify_access_token = None
-youtube_key = None
+SPOTIFY_PLAYLIST = None
+YOUTUBE_KEY = None
+SPOTIFY_CLIENT_ID = None
+SPOTIFY_CLIENT_SECRET = None
+SPOTIFY_ACCESS_TOKEN = None
 
 
 class MyLogger(object):
@@ -26,37 +33,36 @@ def yt_dl_hook(d):
         print('Done downloading, now converting...')
 
 
-ydl_opts = {
-    'format': 'bestaudio/best',
-    'postprocessors': [{
-        'key': 'FFmpegExtractAudio',
-        'preferredcodec': 'mp3',
-        'preferredquality': '192',
-    }],
-    'logger': MyLogger(),
-    'progress_hooks': [yt_dl_hook],
-}
-
-
-def getTrack(track):
+def download_spotify_track(track, playlist_name):
     name = track['track']['name']
     artist = track['track']['artists'][0]['name']
 
     params = {
-        "part": "snippet",
-        "type": "video",
-        "maxResults": 1,
-        "key": youtube_key,
-        "q": name + " " + artist
+        'part': 'snippet',
+        'type': 'video',
+        'maxResults': 1,
+        'key': YOUTUBE_KEY,
+        'q': '{0} {1}'.format(name, artist)
+    }
+
+    ydl_opts = {
+        'format': 'bestaudio/best',
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'mp3',
+            'preferredquality': '192',
+        }],
+        'logger': MyLogger(),
+        'progress_hooks': [yt_dl_hook],
+        'outtmpl': '{0}/{1} - {2}.%(ext)s'.format(playlist_name, name, artist),
     }
 
     r = requests.get(
-        "https://www.googleapis.com/youtube/v3/search", params=params)
+        'https://www.googleapis.com/youtube/v3/search', params=params)
 
     if r.status_code == 200:
         video_id = r.json()['items'][0]['id']['videoId']
-        url = 'https://www.youtube.com/watch?v=' + video_id
-        print('Got youtube url for: ' + name)
+        url = 'https://www.youtube.com/watch?v={0}'.format(video_id)
 
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
@@ -66,36 +72,46 @@ def getTrack(track):
 
 
 def load_config():
-    global playlist, spotify_access_token, youtube_key
+    global SPOTIFY_PLAYLIST, SPOTIFY_ACCESS_TOKEN, YOUTUBE_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
     with open('config.json') as f:
         data = json.load(f)
-        playlist = data['playlist']
-        spotify_access_token = data['spotify_access_token']
-        youtube_key = data['youtube_key']
+        SPOTIFY_PLAYLIST = data['SPOTIFY_PLAYLIST']
+        SPOTIFY_ACCESS_TOKEN = data['SPOTIFY_ACCESS_TOKEN']
+        YOUTUBE_KEY = data['YOUTUBE_KEY']
+        SPOTIFY_CLIENT_ID = data['SPOTIFY_CLIENT_ID']
+        SPOTIFY_CLIENT_SECRET = data['SPOTIFY_CLIENT_SECRET']
 
 
-def main():
-
+@app.route('/')
+def index():
     load_config()
-
-    r = requests.get('https://api.spotify.com/v1/playlists/' + playlist,
-                     headers={'Authorization': 'Bearer ' + spotify_access_token})
-
-    if r.status_code == 200:
-        threads = []
-        for track in r.json()['tracks']['items']:
-            thread = threading.Thread(target=getTrack, args=(track,))
-            thread.start()
-            time.sleep(1)
-
-        for thread in threads:
-            thread.join()
-
-        print("Finished downloading playlist")
-    else:
-        print('spotify response error')
-        print(r.json()['error']['message'])
+    auth_url = app_authorisation(SPOTIFY_CLIENT_ID)
+    return redirect(auth_url)
 
 
-if __name__ == "__main__":
-    main()
+@app.route('/callback/q')
+def callback():
+    authorization_header = user_authorisation(
+        SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
+
+    playlist1 = playlist_data(authorization_header, SPOTIFY_PLAYLIST)
+    playlist_name = playlist1['name']
+
+    threads = []
+
+    print('Started retrieving playlist {0}'.format(playlist_name))
+
+    for track in playlist1['tracks']['items'][:2]:
+        thread = threading.Thread(
+            target=download_spotify_track, args=(track, playlist_name))
+        thread.start()
+        time.sleep(1)
+
+    for thread in threads:
+        thread.join()
+
+    return '{0} retrieved'.format(playlist_name)
+
+
+if __name__ == '__main__':
+    app.run(debug=True, host='0.0.0.0', port=8080)
