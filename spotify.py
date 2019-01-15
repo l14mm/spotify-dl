@@ -13,7 +13,7 @@ SPOTIFY_API_URL = '{}/{}'.format(SPOTIFY_API_BASE_URL, API_VERSION)
 CLIENT_SIDE_URL = 'http://192.168.1.250'
 PORT = 8080
 REDIRECT_URI = '{}:{}/callback/q'.format(CLIENT_SIDE_URL, PORT)
-SCOPE = 'playlist-modify-public playlist-modify-private'
+SCOPE = 'user-read-private playlist-read-private playlist-modify-public playlist-read-collaborative playlist-modify-private streaming'
 STATE = ''
 SHOW_DIALOG_bool = True
 SHOW_DIALOG_str = str(SHOW_DIALOG_bool).lower()
@@ -25,6 +25,20 @@ def playlist_data(header, playlist):
     playlists_response = requests.get(playlist_api_endpoint, headers=header)
     playlist_data = json.loads(playlists_response.text)
     return playlist_data
+
+
+def user_playlist_data(header, profile):
+    playlist_api_endpoint = "{}/playlists".format(profile["href"])
+    playlists_response = requests.get(playlist_api_endpoint, headers=header)
+    playlist_data = json.loads(playlists_response.text)
+    return playlist_data
+
+
+def profile_data(header):
+    user_profile_api_endpoint = "{}/me".format(SPOTIFY_API_URL)
+    profile_response = requests.get(user_profile_api_endpoint, headers=header)
+    profile_data = json.loads(profile_response.text)
+    return profile_data
 
 
 def app_authorisation(SPOTIFY_CLIENT_ID):

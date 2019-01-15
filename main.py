@@ -6,11 +6,11 @@ import requests
 import urllib
 import youtube_dl
 from flask import Flask, request, redirect, g, render_template
-from spotify import app_authorisation, user_authorisation, playlist_data
+from spotify import app_authorisation, user_authorisation, playlist_data, user_playlist_data, profile_data
 
 app = Flask(__name__)
 
-SPOTIFY_PLAYLIST = None
+SPOTIFY_PLAYLISTS = None
 YOUTUBE_KEY = None
 SPOTIFY_CLIENT_ID = None
 SPOTIFY_CLIENT_SECRET = None
@@ -54,7 +54,7 @@ def download_spotify_track(track, playlist_name):
         }],
         'logger': MyLogger(),
         'progress_hooks': [yt_dl_hook],
-        'outtmpl': '{0}/{1} - {2}.%(ext)s'.format(playlist_name, name, artist),
+        'outtmpl': 'Playlists/{0}/{1} - {2}.%(ext)s'.format(playlist_name, name, artist)
     }
 
     r = requests.get(
@@ -72,10 +72,10 @@ def download_spotify_track(track, playlist_name):
 
 
 def load_config():
-    global SPOTIFY_PLAYLIST, SPOTIFY_ACCESS_TOKEN, YOUTUBE_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
+    global SPOTIFY_PLAYLISTS, SPOTIFY_ACCESS_TOKEN, YOUTUBE_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
     with open('config.json') as f:
         data = json.load(f)
-        SPOTIFY_PLAYLIST = data['SPOTIFY_PLAYLIST']
+        SPOTIFY_PLAYLISTS = data['SPOTIFY_PLAYLISTS']
         SPOTIFY_ACCESS_TOKEN = data['SPOTIFY_ACCESS_TOKEN']
         YOUTUBE_KEY = data['YOUTUBE_KEY']
         SPOTIFY_CLIENT_ID = data['SPOTIFY_CLIENT_ID']
@@ -94,23 +94,39 @@ def callback():
     authorization_header = user_authorisation(
         SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET)
 
-    playlist1 = playlist_data(authorization_header, SPOTIFY_PLAYLIST)
-    playlist_name = playlist1['name']
+    profile = profile_data(authorization_header)
+    Name = profile["display_name"]
+    external_urls = profile["external_urls"]
+    uri = profile["uri"]
+    href = profile["href"]
+    id = profile["id"]
+
+    playlists = user_playlist_data(authorization_header, profile)
 
     threads = []
 
-    print('Started retrieving playlist {0}'.format(playlist_name))
+    for item in playlists["items"]:
 
-    for track in playlist1['tracks']['items'][:2]:
-        thread = threading.Thread(
-            target=download_spotify_track, args=(track, playlist_name))
-        thread.start()
-        time.sleep(1)
+        playlist = playlist_data(authorization_header, item['id'])
+        playlist_name = item['name']
 
-    for thread in threads:
-        thread.join()
+        # Only download wanted playlists
+        if (playlist_name not in SPOTIFY_PLAYLISTS):
+            continue
 
-    return '{0} retrieved'.format(playlist_name)
+        print('Started retrieving playlist {0}'.format(playlist_name))
+
+        for track in playlist['tracks']['items']:
+            # TODO: don't download track if it has already been downloaded
+            thread = threading.Thread(
+                target=download_spotify_track, args=(track, playlist_name))
+            thread.start()
+            time.sleep(2)
+
+        for thread in threads:
+            thread.join()
+
+    return 'Playlists retrieved'
 
 
 if __name__ == '__main__':

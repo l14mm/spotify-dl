@@ -1,6 +1,8 @@
 {
     "SPOTIFY_ACCESS_TOKEN": "",
-    "SPOTIFY_PLAYLIST": "",
+    "SPOTIFY_PLAYLISTS": [
+        ""
+    ],
     "YOUTUBE_KEY": "",
     "SPOTIFY_CLIENT_ID": "",
     "SPOTIFY_CLIENT_SECRET": ""
