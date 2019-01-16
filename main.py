@@ -37,6 +37,9 @@ def download_spotify_track(track, playlist_name):
     name = track['track']['name']
     artist = track['track']['artists'][0]['name']
 
+    image = track['track']['album']['images'][0]['url']
+    urllib.request.urlretrieve(image, 'Playlists/{0}/{1} - {2}.jpg'.format(playlist_name, name, artist))
+
     params = {
         'part': 'snippet',
         'type': 'video',
