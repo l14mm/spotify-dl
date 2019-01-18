@@ -2,6 +2,7 @@ import base64
 import json
 import threading
 import time
+import eyed3
 import requests
 import urllib
 import youtube_dl
@@ -37,9 +38,6 @@ def download_spotify_track(track, playlist_name):
     name = track['track']['name']
     artist = track['track']['artists'][0]['name']
 
-    image = track['track']['album']['images'][0]['url']
-    urllib.request.urlretrieve(image, 'Playlists/{0}/{1} - {2}.jpg'.format(playlist_name, name, artist))
-
     params = {
         'part': 'snippet',
         'type': 'video',
@@ -69,8 +67,20 @@ def download_spotify_track(track, playlist_name):
 
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
+
+        image = track['track']['album']['images'][0]['url']
+        urllib.request.urlretrieve(image, 'Playlists/{0}/{1} - {2}.jpg'.format(playlist_name, name, artist))
+
+        # Add id3 tags
+        audiofile = eyed3.load('Playlists/{0}/{1} - {2}.mp3'.format(playlist_name, name, artist))
+        audiofile.tag.artist = artist
+        audiofile.tag.title = name
+
+        audiofile.tag.save()
+
     else:
         print('youtube response error')
+        print(r.json())
         print(r.json()['error']['message'])
 
 
