@@ -68,19 +68,20 @@ def download_spotify_track(track, playlist_name):
         with youtube_dl.YoutubeDL(ydl_opts) as ydl:
             ydl.download([url])
 
-        image = track['track']['album']['images'][0]['url']
-        urllib.request.urlretrieve(image, 'Playlists/{0}/{1} - {2}.jpg'.format(playlist_name, name, artist))
+        # Get album art
+        image_url = track['track']['album']['images'][0]['url']
+        image = urllib.request.urlopen(image_url).read()
 
         # Add id3 tags
         audiofile = eyed3.load('Playlists/{0}/{1} - {2}.mp3'.format(playlist_name, name, artist))
         audiofile.tag.artist = artist
         audiofile.tag.title = name
-
+        audiofile.tag.images.set(3, image , "image/jpeg" ,u"Description")
+        
         audiofile.tag.save()
 
     else:
         print('youtube response error')
-        print(r.json())
         print(r.json()['error']['message'])
 
 
