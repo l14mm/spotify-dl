@@ -1,5 +1,6 @@
 import base64
 import json
+import os.path
 import threading
 import time
 import eyed3
@@ -37,6 +38,10 @@ def yt_dl_hook(d):
 def download_spotify_track(track, playlist_name):
     name = track['track']['name']
     artist = track['track']['artists'][0]['name']
+
+    # Skip if track already exists
+    if os.path.isfile('Playlists/{0}/{1} - {2}.mp3'.format(playlist_name, name, artist)): 
+        return
 
     params = {
         'part': 'snippet',
@@ -131,7 +136,6 @@ def callback():
         print('Started retrieving playlist {0}'.format(playlist_name))
 
         for track in playlist['tracks']['items']:
-            # TODO: don't download track if it has already been downloaded
             thread = threading.Thread(
                 target=download_spotify_track, args=(track, playlist_name))
             thread.start()
