@@ -1,0 +1,44 @@
+<!DOCTYPE HTML>
+<html>
+
+<head>
+    <title>Flask-SocketIO Test</title>
+    <script src='http://ajax.aspnetcdn.com/ajax/jQuery/jquery-1.11.3.min.js'></script>
+    <script type='text/javascript' src='https://cdnjs.cloudflare.com/ajax/libs/socket.io/1.4.6/socket.io.js'></script>
+    <script type='text/javascript' charset='utf-8'>
+        $(document).ready(function () {
+            namespace = '/test';
+            var socket = io.connect('http://' + document.domain + ':' + location.port + namespace);
+
+            socket.on('connect', function (msg) {
+                socket.emit('my event', { data: 'I\'m connected!' });
+            });
+
+            socket.on('message', function (data) {
+                playlists = JSON.parse(data.playlists_status);
+
+                var list = '';
+                $.each(playlists, function (playlist, tracks) {
+                    list += '<ul style="float:left"><h2>' + playlist + '</h2>';
+                    list += '<h3>Missing</h3>';
+                    $.each(tracks['missing'], function (key, track) {
+                        list += '<li>' + track + '</li>';
+                    });
+                    list += '<h3>Downloaded</h3>';
+                    $.each(tracks['downloaded'], function (key, track) {
+                        list += '<li>' + track + '</li>';
+                    });
+                    list += '</ul>';
+                });
+                $('#playlists').html(list);
+            });
+
+        });
+    </script>
+</head>
+
+<body>
+    <div id='playlists'></div>
+</body>
+
+</html>

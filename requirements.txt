@@ -1,5 +1,6 @@
 eyed3
 flask
+flask_socketio
 requests
 urllib
-youtube_dl
+youtube_dl>=2019.1.17
