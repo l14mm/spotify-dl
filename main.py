@@ -6,7 +6,7 @@ import eyed3
 import requests
 import urllib
 import youtube_dl
-from os import listdir, mkdir, listdir, remove
+from os import listdir, makedirs, listdir, remove
 from os.path import isfile, isdir, join
 from flask import Flask, request, redirect, g, render_template
 from flask_socketio import SocketIO, emit
@@ -189,8 +189,6 @@ def get_tracks(authorization_header):
 
         playlists = user_playlist_data(authorization_header, profile)
 
-        threads = []
-
         for item in playlists["items"]:
 
             playlist = playlist_data(authorization_header, item['id'])
@@ -200,38 +198,42 @@ def get_tracks(authorization_header):
             if (playlist_name not in SPOTIFY_PLAYLISTS):
                 continue
 
-            playlist_path = 'Playlists/{0}/'.format(playlist_name)
+            monitor_playlist(playlist_name, playlist)
 
-            # Create playlist folder if it doens't exist
-            if not isdir(playlist_path):
-                mkdir(playlist_path)
-            else:
-                # Cleanup .webm's
-                current_tracks = listdir(playlist_path)
-                for track in current_tracks:
-                    if track.endswith(".webm") or track.endswith(".m4a"):
-                        remove(join(playlist_path, track))
+def monitor_playlist(playlist_name, playlist):
+    threads = []
 
-            # Get current and playlist track names
-            current_track_names = sorted([f.replace('.mp3','') for f in listdir(playlist_path) if isfile(join(playlist_path, f))], key=str.lower)
-            playlist_track_names = sorted([sanitise_file_name(f['track']['name']) for f in playlist['tracks']['items']], key=str.lower)
+    playlist_path = 'Playlists/{0}/'.format(playlist_name)
 
-            # Return playlist tracks which aren't downloaded
-            missing_tracks = list(set(playlist_track_names).difference(current_track_names))
-            print('Missing these {0} tracks from {1}'.format(len(missing_tracks), playlist_name))
-            print(missing_tracks)
+    # Create playlist folder if it doens't exist
+    if not isdir(playlist_path):
+        makedirs(playlist_path)
+    else:
+        # Cleanup unwanted files
+        current_tracks = listdir(playlist_path)
+        for track in current_tracks:
+            if track.endswith(".webm") or track.endswith(".m4a"):
+                remove(join(playlist_path, track))
 
-            playlists_status[playlist_name] = {'missing': missing_tracks, 'downloaded': current_track_names}
+    # Get current and playlist track names
+    current_track_names = sorted([f.replace('.mp3','') for f in listdir(playlist_path) if isfile(join(playlist_path, f))], key=str.lower)
+    playlist_track_names = sorted([sanitise_file_name(f['track']['name']) for f in playlist['tracks']['items']], key=str.lower)
 
-            for track in playlist['tracks']['items']:
-                if sanitise_file_name(track['track']['name']) in missing_tracks:
-                    thread = threading.Thread(
-                        target=download_spotify_track, args=(track, playlist_name))
-                    thread.start()
+    # Return playlist tracks which aren't downloaded
+    missing_tracks = list(set(playlist_track_names).difference(current_track_names))
+    print('Missing these {0} tracks from {1}'.format(len(missing_tracks), playlist_name))
+    print(missing_tracks)
 
-        for thread in threads:
-            thread.join()
+    playlists_status[playlist_name] = {'missing': missing_tracks, 'downloaded': current_track_names}
 
-
+    for track in playlist['tracks']['items']:
+        if sanitise_file_name(track['track']['name']) in missing_tracks:
+            thread = threading.Thread(
+                target=download_spotify_track, args=(track, playlist_name))
+            thread.start()
+    
+    for thread in threads:
+        thread.join()
+        
 if __name__ == '__main__':
     socketio.run(app, host='0.0.0.0', port=8080)
