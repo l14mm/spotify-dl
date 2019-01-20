@@ -16,6 +16,7 @@
 
             socket.on('message', function (data) {
                 playlists = JSON.parse(data.playlists_status);
+                playlistNames = JSON.parse(data.playlist_names);
 
                 var list = '';
                 $.each(playlists, function (playlist, tracks) {
@@ -31,6 +32,22 @@
                     list += '</ul>';
                 });
                 $('#playlists').html(list);
+
+                var playlistNamesHtml = '';
+                playlistNamesHtml += '<ul style="float:left"><h2>Select playlist to monitor</h2>';
+                playlistNamesHtml += '<h3>Available</h3>';
+                $.each(playlistNames['available'], function (index, playlist) {
+                    playlistNamesHtml += '<li>' + playlist + '</li>';
+                });
+                playlistNamesHtml += '<h3>Monitored</h3>';
+                $.each(playlistNames['monitored'], function (index, playlist) {
+                    playlistNamesHtml += '<li>' + playlist + '</li>';
+                });
+                playlistNamesHtml += '</ul>';
+                $('#playlistNames').html(playlistNamesHtml);
+                $('#playlistNames').on('click', function(event) {
+                    socket.emit('monitor_playlist', { data: event.target.innerText });
+                })
             });
 
         });
@@ -39,6 +56,7 @@
 
 <body>
     <div id='playlists'></div>
+    <div id='playlistNames'></div>
 </body>
 
 </html>

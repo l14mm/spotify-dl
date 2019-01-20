@@ -27,6 +27,8 @@ YOUTUBE_KEY_INDEX = 0
 update_thread = None
 main_thread = None
 playlists_status = {}
+playlist_names = {'available':[],'monitored':[]}
+playlists = {}
 
 @socketio.on('connect', namespace='/test')
 def test_connect():
@@ -106,7 +108,7 @@ def download_spotify_track(track, playlist_name):
                 # Check if file downloaded and converted successfully
                 if isfile(file_path):
                     break
-            except e:
+            except Exception as e:
                 print("Youtube download error: {0}".format(e))
 
         # Check if file downloaded and converted successfully
@@ -131,7 +133,7 @@ def download_spotify_track(track, playlist_name):
     else:
         print('tried all keys')
         print('youtube response error')
-        print(r.json())
+        print(r)
 
 
 def load_config():
@@ -147,7 +149,7 @@ def load_config():
 def update_page():
     while True:
         time.sleep(1)
-        socketio.emit('message', {'playlists_status': json.dumps(playlists_status)}, namespace='/test')
+        socketio.emit('message', {'playlists_status': json.dumps(playlists_status), "playlist_names": json.dumps(playlist_names)}, namespace='/test')
 
 @app.route('/')
 def index():
@@ -170,23 +172,18 @@ def callback():
         update_thread = threading.Thread(target=update_page)
         update_thread.start()
     if main_thread is None:
-        main_thread = threading.Thread(target=get_tracks, args=(authorization_header,))
+        main_thread = threading.Thread(target=load_playlists, args=(authorization_header,))
         main_thread.start()
+    # threading.Thread(target=monitor_playlists).start()
 
-    return render_template('index.html', playlists=playlists_status)
+    return render_template('index.html', playlists=playlists_status, playlist_names=playlist_names)
 
-def get_tracks(authorization_header):
-    global thread, playlists_status
+def load_playlists(authorization_header):
+    global thread, playlists_status, playlist_names, playlists
 
     with app.test_request_context():
 
         profile = profile_data(authorization_header)
-        Name = profile["display_name"]
-        external_urls = profile["external_urls"]
-        uri = profile["uri"]
-        href = profile["href"]
-        id = profile["id"]
-
         playlists = user_playlist_data(authorization_header, profile)
 
         for item in playlists["items"]:
@@ -194,13 +191,18 @@ def get_tracks(authorization_header):
             playlist = playlist_data(authorization_header, item['id'])
             playlist_name = item['name']
 
-            # Only download wanted playlists
-            if (playlist_name not in SPOTIFY_PLAYLISTS):
-                continue
+            playlist_names['available'].append(playlist_name)
+            playlists[playlist_name] = playlist
 
-            monitor_playlist(playlist_name, playlist)
+@socketio.on('monitor_playlist', namespace='/test')
+def monitor_playlist(msg):
+    playlist_name = msg['data']
+    
+    playlist = playlists[playlist_name]
+    if playlist_name in playlist_names['available']:
+        playlist_names['available'].remove(playlist_name)
+        playlist_names['monitored'].append(playlist_name)
 
-def monitor_playlist(playlist_name, playlist):
     threads = []
 
     playlist_path = 'Playlists/{0}/'.format(playlist_name)
