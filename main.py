@@ -13,7 +13,7 @@ from spotify import app_authorisation, user_authorisation, playlist_data, user_p
 app = Flask(__name__)
 
 SPOTIFY_PLAYLISTS = None
-YOUTUBE_KEY = None
+YOUTUBE_KEYS = []
 SPOTIFY_CLIENT_ID = None
 SPOTIFY_CLIENT_SECRET = None
 SPOTIFY_ACCESS_TOKEN = None
@@ -43,14 +43,6 @@ def download_spotify_track(track, playlist_name):
     if os.path.isfile('Playlists/{0}/{1} - {2}.mp3'.format(playlist_name, name, artist)): 
         return
 
-    params = {
-        'part': 'snippet',
-        'type': 'video',
-        'maxResults': 1,
-        'key': YOUTUBE_KEY,
-        'q': '{0} {1}'.format(name, artist)
-    }
-
     ydl_opts = {
         'format': 'bestaudio/best',
         'postprocessors': [{
@@ -63,10 +55,25 @@ def download_spotify_track(track, playlist_name):
         'outtmpl': 'Playlists/{0}/{1} - {2}.%(ext)s'.format(playlist_name, name, artist)
     }
 
-    r = requests.get(
-        'https://www.googleapis.com/youtube/v3/search', params=params)
+    YOUTUBE_KEY_INDEX = 0
+    r = None
 
-    if r.status_code == 200:
+    while (r == None or r.status_code != 200) and YOUTUBE_KEY_INDEX < len(YOUTUBE_KEYS):
+        youtube_search_params = {
+        'part': 'snippet',
+        'type': 'video',
+        'maxResults': 1,
+        'key': YOUTUBE_KEYS[YOUTUBE_KEY_INDEX],
+        'q': '{0} {1}'.format(name, artist)
+        }
+
+        r = requests.get(
+        'https://www.googleapis.com/youtube/v3/search', params=youtube_search_params)
+
+        # Try next key
+        YOUTUBE_KEY_INDEX += 1
+
+    if r != None and r.status_code == 200:
         video_id = r.json()['items'][0]['id']['videoId']
         url = 'https://www.youtube.com/watch?v={0}'.format(video_id)
 
@@ -91,12 +98,12 @@ def download_spotify_track(track, playlist_name):
 
 
 def load_config():
-    global SPOTIFY_PLAYLISTS, SPOTIFY_ACCESS_TOKEN, YOUTUBE_KEY, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
+    global SPOTIFY_PLAYLISTS, SPOTIFY_ACCESS_TOKEN, YOUTUBE_KEYS, SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET
     with open('config.json') as f:
         data = json.load(f)
         SPOTIFY_PLAYLISTS = data['SPOTIFY_PLAYLISTS']
         SPOTIFY_ACCESS_TOKEN = data['SPOTIFY_ACCESS_TOKEN']
-        YOUTUBE_KEY = data['YOUTUBE_KEY']
+        YOUTUBE_KEYS = data['YOUTUBE_KEYS']
         SPOTIFY_CLIENT_ID = data['SPOTIFY_CLIENT_ID']
         SPOTIFY_CLIENT_SECRET = data['SPOTIFY_CLIENT_SECRET']
 
