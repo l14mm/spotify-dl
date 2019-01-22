@@ -24,23 +24,24 @@ class MyLogger(object):
         pass
 
     def warning(self, msg):
-        pass
+        print('youtube logger warning: ' + msg)
 
     def error(self, msg):
-        print(msg)
+        print('youtube logger error: ' + msg)
 
 
 def yt_dl_hook(d):
     if d['status'] == 'finished':
-        print('Done downloading, now converting...')
+        print('Finished downloading {0}'.format(d['filename']))
 
 
 def download_spotify_track(track, playlist_name):
-    name = track['track']['name']
+    track_name = sanitise_file_name(track['track']['name'])
     artist = track['track']['artists'][0]['name']
+    file_path = 'Playlists/{0}/{1}.mp3'.format(playlist_name, track_name)
 
     # Skip if track already exists
-    if os.path.isfile('Playlists/{0}/{1} - {2}.mp3'.format(playlist_name, name, artist)): 
+    if os.path.isfile(file_path): 
         return
 
     ydl_opts = {
@@ -52,49 +53,62 @@ def download_spotify_track(track, playlist_name):
         }],
         'logger': MyLogger(),
         'progress_hooks': [yt_dl_hook],
-        'outtmpl': 'Playlists/{0}/{1} - {2}.%(ext)s'.format(playlist_name, name, artist)
+        'outtmpl': 'Playlists/{0}/{1}.%(ext)s'.format(playlist_name, track_name)
     }
 
-    YOUTUBE_KEY_INDEX = 0
+    youtube_key_index = 0
     r = None
 
-    while (r == None or r.status_code != 200) and YOUTUBE_KEY_INDEX < len(YOUTUBE_KEYS):
+    while (r == None or r.status_code != 200) and youtube_key_index < len(YOUTUBE_KEYS):
         youtube_search_params = {
         'part': 'snippet',
         'type': 'video',
         'maxResults': 1,
-        'key': YOUTUBE_KEYS[YOUTUBE_KEY_INDEX],
-        'q': '{0} {1}'.format(name, artist)
+        'key': YOUTUBE_KEYS[youtube_key_index],
+        'q': '{0} {1}'.format(track_name, artist)
         }
 
         r = requests.get(
         'https://www.googleapis.com/youtube/v3/search', params=youtube_search_params)
 
         # Try next key
-        YOUTUBE_KEY_INDEX += 1
+        youtube_key_index += 1
 
     if r != None and r.status_code == 200:
         video_id = r.json()['items'][0]['id']['videoId']
         url = 'https://www.youtube.com/watch?v={0}'.format(video_id)
 
-        with youtube_dl.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+        attempts = 0
+        while attempts < 4:
+            try:
+                with youtube_dl.YoutubeDL(ydl_opts) as ydl:
+                    ydl.download([url])
+                break
+            except Exception as e:
+                print("Youtube download error {0}, track {1}".format(e, track_name))
+
+        # Wait for conversion to finish
+        while not os.path.isfile(file_path):
+            time.sleep(1)
 
         # Get album art
         image_url = track['track']['album']['images'][0]['url']
         image = urllib.request.urlopen(image_url).read()
 
-        # Add id3 tags
-        audiofile = eyed3.load('Playlists/{0}/{1} - {2}.mp3'.format(playlist_name, name, artist))
-        audiofile.tag.artist = artist
-        audiofile.tag.title = name
-        audiofile.tag.images.set(3, image , "image/jpeg" ,u"Description")
-        
-        audiofile.tag.save()
+        try:
+            audiofile = eyed3.load(file_path)
+            audiofile.tag.artist = artist
+            audiofile.tag.title = track_name
+            audiofile.tag.images.set(3, image , "image/jpeg" ,u"Description")
+            
+            audiofile.tag.save()
+        except Exception as e:
+            print('error on eyed3 on track {0}, error: {1}'.format(track_name, e))
 
     else:
         print('youtube response error')
         print(r.json()['error']['message'])
+        print(r)
 
 
 def load_config():
@@ -114,6 +128,9 @@ def index():
     auth_url = app_authorisation(SPOTIFY_CLIENT_ID)
     return redirect(auth_url)
 
+# Make sure file name doesn't contain any illegal characters
+def sanitise_file_name(name):
+    return name.replace('/','-').strip('.').strip('`').strip("'")
 
 @app.route('/callback/q')
 def callback():
@@ -135,6 +152,7 @@ def callback():
 
         playlist = playlist_data(authorization_header, item['id'])
         playlist_name = item['name']
+        sanitised_playlist_name = sanitise_file_name(item['name'])
 
         # Only download wanted playlists
         if (playlist_name not in SPOTIFY_PLAYLISTS):
@@ -144,9 +162,8 @@ def callback():
 
         for track in playlist['tracks']['items']:
             thread = threading.Thread(
-                target=download_spotify_track, args=(track, playlist_name))
+                target=download_spotify_track, args=(track, sanitised_playlist_name))
             thread.start()
-            time.sleep(2)
 
         for thread in threads:
             thread.join()
