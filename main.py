@@ -92,15 +92,19 @@ def download_spotify_track(track, playlist_name):
             time.sleep(1)
 
         # Get album art
-        image_url = track['track']['album']['images'][0]['url']
+        album = track['track']['album']
+        image_url = album['images'][0]['url']
         image = urllib.request.urlopen(image_url).read()
 
         try:
             audiofile = eyed3.load(file_path)
-            audiofile.tag.artist = artist
             audiofile.tag.title = track_name
+            audiofile.tag.artist = artist
+            audiofile.tag.album = album['name']
+            audiofile.tag.album_artist = album['artists'][0]['name']
+            audiofile.tag.track_num = track['track']['track_number']
             audiofile.tag.images.set(3, image , "image/jpeg" ,u"Description")
-            
+
             audiofile.tag.save()
         except Exception as e:
             print('error on eyed3 on track {0}, error: {1}'.format(track_name, e))
@@ -167,6 +171,8 @@ def callback():
 
         for thread in threads:
             thread.join()
+
+    print('Playlists retrieved')
 
     return 'Playlists retrieved'
 
