@@ -41,7 +41,7 @@ def download_spotify_track(track, playlist_name):
     file_path = 'Playlists/{0}/{1}.mp3'.format(playlist_name, track_name)
 
     # Skip if track already exists
-    if os.path.isfile(file_path): 
+    if os.path.isfile(file_path):
         return
 
     ydl_opts = {
@@ -61,15 +61,15 @@ def download_spotify_track(track, playlist_name):
 
     while (r == None or r.status_code != 200) and youtube_key_index < len(YOUTUBE_KEYS):
         youtube_search_params = {
-        'part': 'snippet',
-        'type': 'video',
-        'maxResults': 1,
-        'key': YOUTUBE_KEYS[youtube_key_index],
-        'q': '{0} {1}'.format(track_name, artist)
+            'part': 'snippet',
+            'type': 'video',
+            'maxResults': 1,
+            'key': YOUTUBE_KEYS[youtube_key_index],
+            'q': '{0} {1}'.format(track_name, artist)
         }
 
         r = requests.get(
-        'https://www.googleapis.com/youtube/v3/search', params=youtube_search_params)
+            'https://www.googleapis.com/youtube/v3/search', params=youtube_search_params)
 
         # Try next key
         youtube_key_index += 1
@@ -104,7 +104,7 @@ def download_spotify_track(track, playlist_name):
             audiofile.tag.album_artist = album['artists'][0]['name']
             audiofile.tag.track_num = track['track']['track_number']
             audiofile.tag.images.set(3, image , "image/jpeg" ,u"Description")
-
+            audiofile.tag.lyrics.set(u"""Test Lyrics""")
             audiofile.tag.save()
         except Exception as e:
             print('error on eyed3 on track {0}, error: {1}'.format(track_name, e))
@@ -134,7 +134,7 @@ def index():
 
 # Make sure file name doesn't contain any illegal characters
 def sanitise_file_name(name):
-    return name.replace('/','-').strip('.').strip('`').strip("'")
+    return name.replace('/', '-').replace('"', '').strip('.').strip('`').strip("'")
 
 @app.route('/callback/q')
 def callback():
@@ -167,10 +167,17 @@ def callback():
         for track in playlist['tracks']['items']:
             thread = threading.Thread(
                 target=download_spotify_track, args=(track, sanitised_playlist_name))
+            threads.append(thread)
             thread.start()
 
-        for thread in threads:
-            thread.join()
+    num_threads_left = len(threads)
+
+    for thread in threads:
+        thread.join()
+        num_threads_left -= 1
+        print('{0} songs left'.format(num_threads_left))
+
+    print('Playlists retrieved')
 
     print('Playlists retrieved')
 
